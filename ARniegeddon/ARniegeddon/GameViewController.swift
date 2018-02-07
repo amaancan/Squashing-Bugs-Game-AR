@@ -29,33 +29,43 @@
  */
 
 import UIKit
-import SpriteKit
-import GameplayKit
+import ARKit
 
-//IB NOTES::
+// IB NOTES::
 // 1. Change self.view to 'ARSKView'
 
+// INFO.PLIST NOTES::
+// 1. Added "Privacy - Camera Usage Description"
 
 class GameViewController: UIViewController {
+  
+  var sceneView: ARSKView!
   
   override func viewDidLoad() {
     super.viewDidLoad()
     
-    if let view = self.view as! SKView? {
-      // Load the SKScene from 'GameScene.sks'
-      if let scene = SKScene(fileNamed: "GameScene") {
-        // Set the scale mode to scale to fit the window
-        scene.scaleMode = .aspectFill
-        
-        // Present the scene
-        view.presentScene(scene)
-      }
+    // get the loaded view as an ARSKView — matching the change in Main.storyboard
+    if let view = self.view as? ARSKView {
+      sceneView = view // main view is set: will soon start displaying camera video feed
+      sceneView.delegate = self // MARK: removed ! from sceneView
       
-      view.ignoresSiblingOrder = true
-      
-      view.showsFPS = true
-      view.showsNodeCount = true
+      // Initialize the SKScene: GameScene, directly, instead of through the .sks file
+      let scene = GameScene(size: view.bounds.size)
+      scene.scaleMode = .resizeFill
+      scene.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+      view.presentScene(scene)
     }
+  }
+  
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    let configuration = ARWorldTrackingConfiguration() //tracks device's orientation & posn
+    sceneView.session.run(configuration)
+  }
+  
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    sceneView.session.pause()
   }
   
   override var shouldAutorotate: Bool {
@@ -64,18 +74,35 @@ class GameViewController: UIViewController {
   
   override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
     if UIDevice.current.userInterfaceIdiom == .phone {
+      // tailor style & behavior of UI to device type
       return .allButUpsideDown
     } else {
       return .all
     }
   }
   
-  override func didReceiveMemoryWarning() {
-    super.didReceiveMemoryWarning()
-    // Release any cached data, images, etc that aren't in use.
-  }
-  
   override var prefersStatusBarHidden: Bool {
     return true
+  }
+}
+
+
+// MARK: - ARSKView DELEGATE METODS FOR SESSION EVENTS
+extension GameViewController: ARSKViewDelegate {
+  
+  func session(_ session: ARSession, didFailWithError error: Error) {
+    // user will have to allow access to the camera through the Settings app.
+    // TODO: This is a good spot to display an appropriate dialog.
+    print("Session Failed - probably due to lack of camera access")
+  }
+  
+  func sessionWasInterrupted(_ session: ARSession) {
+    print("Session interrupted")
+  }
+  
+  func sessionInterruptionEnded(_ session: ARSession) {
+    // camera won’t be in exactly the same orientation or position so reset tracking & anchors
+    print("Session resumed")
+    sceneView.session.run(session.configuration!, options: [.resetTracking, .removeExistingAnchors])
   }
 }
