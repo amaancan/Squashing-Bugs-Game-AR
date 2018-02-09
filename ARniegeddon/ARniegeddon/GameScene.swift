@@ -28,84 +28,52 @@
  * THE SOFTWARE.
  */
 
-import SpriteKit
-import GameplayKit
+import ARKit
 
 class GameScene: SKScene {
+  var sceneView: ARSKView { return view as! ARSKView }
   
-  private var label : SKLabelNode?
-  private var spinnyNode : SKShapeNode?
+  var isWorldSetUp = false // flag to check if AR nodes are already added to the game world
   
-  override func didMove(to view: SKView) {
-    
-    // Get label node from scene and store it for use later
-    self.label = self.childNode(withName: "//helloLabel") as? SKLabelNode
-    if let label = self.label {
-      label.alpha = 0.0
-      label.run(SKAction.fadeIn(withDuration: 2.0))
-    }
-    
-    // Create shape node to use during mouse interaction
-    let w = (self.size.width + self.size.height) * 0.05
-    self.spinnyNode = SKShapeNode.init(rectOf: CGSize.init(width: w, height: w), cornerRadius: w * 0.3)
-    
-    if let spinnyNode = self.spinnyNode {
-      spinnyNode.lineWidth = 2.5
-      
-      spinnyNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: CGFloat(Double.pi), duration: 1)))
-      spinnyNode.run(SKAction.sequence([SKAction.wait(forDuration: 0.5),
-                                        SKAction.fadeOut(withDuration: 0.5),
-                                        SKAction.removeFromParent()]))
-    }
-  }
-  
-  
-  func touchDown(atPoint pos : CGPoint) {
-    if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-      n.position = pos
-      n.strokeColor = SKColor.green
-      self.addChild(n)
-    }
-  }
-  
-  func touchMoved(toPoint pos : CGPoint) {
-    if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-      n.position = pos
-      n.strokeColor = SKColor.blue
-      self.addChild(n)
-    }
-  }
-  
-  func touchUp(atPoint pos : CGPoint) {
-    if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-      n.position = pos
-      n.strokeColor = SKColor.red
-      self.addChild(n)
-    }
-  }
-  
-  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-    if let label = self.label {
-      label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-    }
-    
-    for t in touches { self.touchDown(atPoint: t.location(in: self)) }
-  }
-  
-  override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-    for t in touches { self.touchMoved(toPoint: t.location(in: self)) }
-  }
-  
-  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-    for t in touches { self.touchUp(atPoint: t.location(in: self)) }
-  }
-  
-  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-    for t in touches { self.touchUp(atPoint: t.location(in: self)) }
-  }
-  
-  
+  // update(_:) is called every frame; attempt to call the method inside there
+  // this way, you only run the set up code once, and only when the session is ready.
   override func update(_ currentTime: TimeInterval) {
-    // Called before each frame is rendered
+    if !isWorldSetUp { setUpWorld() }
+  }
+  
+  // load the alien once — only if isWorldSetUp is false
+  private func setUpWorld() {
+    // check if the session has an initialized currentFrame
+    guard let currentFrame = sceneView.session.currentFrame
+      else { return }
+    
+    var translation = matrix_identity_float4x4
+    translation.columns.3.z = -0.3
+  
+    let transform = currentFrame.camera.transform * translation
+    
+    //Each frame tracks this anchor and recalculates the transformation matrices of the anchors and the camera using the device’s new position and orientation.
+    //When you add an anchor, the session calls sceneView’s delegate method view(_:nodeFor:) to find out what sort of SKNode you want to attach to this anchor.
+    let anchor = ARAnchor(transform: transform)
+    sceneView.session.add(anchor: anchor)
+    
+    //retrieve the light estimate from the session’s current frame
+    guard let lightEstimate = currentFrame.lightEstimate else { return }
+    
+    //Using the light estimate’s intensity of ambient light in the scene, you calculate a blend factor between 0 and 1, where 0 will be the brightest.
+    let neutralIntensity: CGFloat = 1000
+    let ambientIntensity = min(lightEstimate.ambientIntensity,
+                               neutralIntensity)
+    let blendFactor = 1 - ambientIntensity / neutralIntensity
+    
+    //Using this blend factor, calculate how much black should tint the bugs
+    for node in children {
+      if let bug = node as? SKSpriteNode {
+        bug.color = .black
+        bug.colorBlendFactor = blendFactor
+      }
+    }
+    
+    isWorldSetUp = true
   }
 }

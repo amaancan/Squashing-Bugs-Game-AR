@@ -105,4 +105,11 @@ extension GameViewController: ARSKViewDelegate {
     print("Session resumed")
     sceneView.session.run(session.configuration!, options: [.resetTracking, .removeExistingAnchors])
   }
+  
+  //Notice that whichever way you turn the camera, the bug faces you. This is called a billboard, which is a technique used in many 3D games as a cheap way of adding elements such as trees and grass to a scene. Simply add a 2D object to a 3D scene and make sure that it’s always facing the viewer.
+  func view(_ view: ARSKView, nodeFor anchor: ARAnchor) -> SKNode? {
+    let bug = SKSpriteNode(imageNamed: "bug")
+    bug.name = "bug"
+    return bug
+  }
 }
