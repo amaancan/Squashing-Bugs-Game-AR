@@ -33,47 +33,92 @@ import ARKit
 class GameScene: SKScene {
   var sceneView: ARSKView { return view as! ARSKView }
   
+  //MARK: - ADDING BUGS
+  
+  
   var isWorldSetUp = false // flag to check if AR nodes are already added to the game world
   
-  // update(_:) is called every frame; attempt to call the method inside there
-  // this way, you only run the set up code once, and only when the session is ready.
+    // update(_:) is called every frame; attempt to call the method inside there
+    // this way, you only run the set up code once, and only when the session is ready.
   override func update(_ currentTime: TimeInterval) {
     if !isWorldSetUp { setUpWorld() }
+    setUpLightEstimation()
   }
   
-  // load the alien once — only if isWorldSetUp is false
-  private func setUpWorld() {
-    // check if the session has an initialized currentFrame
-    guard let currentFrame = sceneView.session.currentFrame
-      else { return }
+  private func setUpWorld() {  // load the alien once — only if isWorldSetUp is false
+    guard let currentFrame = sceneView.session.currentFrame else { return }
+      // check if the session has an initialized currentFrame
     
     var translation = matrix_identity_float4x4
     translation.columns.3.z = -0.3
   
     let transform = currentFrame.camera.transform * translation
     
-    //Each frame tracks this anchor and recalculates the transformation matrices of the anchors and the camera using the device’s new position and orientation.
-    //When you add an anchor, the session calls sceneView’s delegate method view(_:nodeFor:) to find out what sort of SKNode you want to attach to this anchor.
+      //Each frame tracks this anchor and recalculates the transformation matrices of the anchors and the camera using the device’s new position and orientation.
+      //When you add an anchor, the session calls sceneView’s delegate method view(_:nodeFor:) to find out what sort of SKNode you want to attach to this anchor.
     let anchor = ARAnchor(transform: transform)
     sceneView.session.add(anchor: anchor)
     
-    //retrieve the light estimate from the session’s current frame
-    guard let lightEstimate = currentFrame.lightEstimate else { return }
+    isWorldSetUp = true
+  }
+  
+  private func setUpLightEstimation() {
+      //retrieve the light estimate from the session’s current frame
+    guard let currentFrame = sceneView.session.currentFrame,
+      let lightEstimate = currentFrame.lightEstimate else { return }
     
-    //Using the light estimate’s intensity of ambient light in the scene, you calculate a blend factor between 0 and 1, where 0 will be the brightest.
-    let neutralIntensity: CGFloat = 1000
+      //Using the light estimate’s intensity of ambient light in the scene, you calculate a blend factor between 0 and 1, where 0 will be the brightest.
+    let neutralIntensity: CGFloat = 1000 // lumens in a brightly lit room
     let ambientIntensity = min(lightEstimate.ambientIntensity,
                                neutralIntensity)
     let blendFactor = 1 - ambientIntensity / neutralIntensity
     
-    //Using this blend factor, calculate how much black should tint the bugs
-    for node in children {
+      //Using this blend factor, calculate how much black should tint the bugs
+    for node in children { // MARK: Q - how does it know we're referring to root node: SKScene
       if let bug = node as? SKSpriteNode {
         bug.color = .black
-        bug.colorBlendFactor = blendFactor
+        bug.colorBlendFactor = blendFactor // % of colour (black) blended with sprite's texture
+      }
+    }
+  }
+  
+  
+  //MARK: - SQUASHING THE BUGS
+  
+  
+  var sight: SKSpriteNode!
+  
+  override func didMove(to view: SKView) {
+    sight = SKSpriteNode(imageNamed: "sight") // a sight to the center of the screen for aiming
+    addChild(sight)
+  }
+  
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    run(Sounds.fire)
+    var hitBug: SKNode?
+    
+    // MARK: Find if bug is hit
+    let hitNodes = nodes(at: sight.position) // retrieve all nodes intersecting the sight's xy location
+    // ARKit calculates a 2D posn and scale for the SKNode from the 3D information
+    
+    for node in hitNodes {
+      if node.name == "bug" {
+        hitBug = node
+        break
       }
     }
     
-    isWorldSetUp = true
+    // MARK: If hit, remove bug's anchor (system auto-removes node) and run sound
+    if let hitBug = hitBug,
+      let anchor = sceneView.anchor(for: hitBug) {
+      
+      let action = SKAction.run {
+        self.sceneView.session.remove(anchor: anchor)
+      }
+      let group = SKAction.group([Sounds.hit, action])
+      let sequence = [SKAction.wait(forDuration: 0.3), group]
+      hitBug.run(SKAction.sequence(sequence))
+    }
+    
   }
 }
