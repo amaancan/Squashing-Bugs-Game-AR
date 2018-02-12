@@ -43,4 +43,10 @@ enum Sounds {
                                                      waitForCompletion: false)
 }
 
+enum NodeType: String {
+  case bug
+  case firebug
+  case bugspray
+}
+
 

@@ -51,8 +51,8 @@ class GameViewController: UIViewController {
       
       // Initialize the SKScene: GameScene, directly, instead of through the .sks file
       let scene = GameScene(size: view.bounds.size)
-      scene.scaleMode = .resizeFill
-      scene.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+      scene.scaleMode = .resizeFill // Defines how the scene is mapped to the view that presents it.
+      scene.anchorPoint = CGPoint(x: 0.5, y: 0.5) // scene’s origin
       view.presentScene(scene)
     }
   }
@@ -108,8 +108,14 @@ extension GameViewController: ARSKViewDelegate {
   
   //Notice that whichever way you turn the camera, the bug faces you. This is called a billboard, which is a technique used in many 3D games as a cheap way of adding elements such as trees and grass to a scene. Simply add a 2D object to a 3D scene and make sure that it’s always facing the viewer.
   func view(_ view: ARSKView, nodeFor anchor: ARAnchor) -> SKNode? {
-    let bug = SKSpriteNode(imageNamed: "bug")
-    bug.name = "bug"
-    return bug
+    var node: SKNode?
+    
+    if let anchor = anchor as? GameAnchor,
+      let type = anchor.type {
+      // create the appropriate SKSpriteNode using the anchor’s type
+      node = SKSpriteNode(imageNamed: type.rawValue)
+      node?.name = type.rawValue
+    }
+    return node
   }
 }

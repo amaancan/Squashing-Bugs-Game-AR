@@ -32,32 +32,58 @@ import ARKit
 
 class GameScene: SKScene {
   var sceneView: ARSKView { return view as! ARSKView }
+  let gameSize = CGSize(width: 2, height: 2)
+  var sight: SKSpriteNode!
+  
+  override func didMove(to view: SKView) { // Called once, immediately after a scene is presented by a view (not called every frame, so don't put game logic or node changes here.
+    sight = SKSpriteNode(imageNamed: "sight") // a sight to the center of the screen for aiming
+    addChild(sight)
+    
+    srand48(Int(Date.timeIntervalSinceReferenceDate)) // seed the random number generator used for bug's y-posn
+    // MARK: Q - why seeding in didMove(to:) instead of update(_:)?
+  }
   
   //MARK: - ADDING BUGS
   
   
   var isWorldSetUp = false // flag to check if AR nodes are already added to the game world
   
-    // update(_:) is called every frame; attempt to call the method inside there
+    // update(_:) is called once per frame; attempt to call the method inside there
     // this way, you only run the set up code once, and only when the session is ready.
   override func update(_ currentTime: TimeInterval) {
     if !isWorldSetUp { setUpWorld() }
-    setUpLightEstimation()
+    setUpLightEstimation() // MARK: Q - move inside if scope above?
   }
   
   private func setUpWorld() {  // load the alien once — only if isWorldSetUp is false
-    guard let currentFrame = sceneView.session.currentFrame else { return }
-      // check if the session has an initialized currentFrame
     
-    var translation = matrix_identity_float4x4
-    translation.columns.3.z = -0.3
-  
-    let transform = currentFrame.camera.transform * translation
+    // check if the session has an initialized currentFrame
+    guard let currentFrame = sceneView.session.currentFrame,
+      let scene = SKScene(fileNamed: "Level1")
+      else { return }
     
-      //Each frame tracks this anchor and recalculates the transformation matrices of the anchors and the camera using the device’s new position and orientation.
-      //When you add an anchor, the session calls sceneView’s delegate method view(_:nodeFor:) to find out what sort of SKNode you want to attach to this anchor.
-    let anchor = ARAnchor(transform: transform)
-    sceneView.session.add(anchor: anchor)
+    for node in scene.children {
+      if let node = node as? SKSpriteNode {
+        var translation = matrix_identity_float4x4
+        
+        // MARK: Convert bug's position from 2D-SK to 3D-ARK
+        let positionX = node.position.x / scene.size.width
+        let positionY = node.position.y / scene.size.height
+        translation.columns.3.x = Float(positionX * gameSize.width)
+        translation.columns.3.z = -Float(positionY * gameSize.height)
+        translation.columns.3.y = Float(drand48() - 0.5) // generates a pseudo-random # b/w 0 to 1, using the linear congruential algorithm and 48-bit integer arithmetic
+        let transform = currentFrame.camera.transform * translation
+        
+        // Each frame tracks this anchor and recalculates the transformation matrices of the anchors and the camera using the device’s new position and orientation.
+        // When you add an anchor, the session calls sceneView’s delegate method view(_:nodeFor:) to find out what sort of SKNode you want to attach to this anchor.
+        let anchor = GameAnchor(transform: transform)
+        if let name = node.name, //get the type of the bug from the SKSpriteNode name you specified in Level1.sks
+          let type = NodeType(rawValue: name) {
+          anchor.type = type
+          sceneView.session.add(anchor: anchor)
+        }
+      }
+    }
     
     isWorldSetUp = true
   }
@@ -85,13 +111,6 @@ class GameScene: SKScene {
   
   //MARK: - SQUASHING THE BUGS
   
-  
-  var sight: SKSpriteNode!
-  
-  override func didMove(to view: SKView) {
-    sight = SKSpriteNode(imageNamed: "sight") // a sight to the center of the screen for aiming
-    addChild(sight)
-  }
   
   override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
     run(Sounds.fire)
