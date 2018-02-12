@@ -43,6 +43,7 @@ class GameScene: SKScene {
     // MARK: Q - why seeding in didMove(to:) instead of update(_:)?
   }
   
+  
   //MARK: - ADDING BUGS
   
   
@@ -51,8 +52,24 @@ class GameScene: SKScene {
     // update(_:) is called once per frame; attempt to call the method inside there
     // this way, you only run the set up code once, and only when the session is ready.
   override func update(_ currentTime: TimeInterval) {
-    if !isWorldSetUp { setUpWorld() }
+    if !isWorldSetUp { setUpWorld() } // setUpWorld() not called every frame, just once!
+    
+    guard let currentFrame = sceneView.session.currentFrame else { return }
+    
     setUpLightEstimation() // MARK: Q - move inside if scope above?
+    
+    // MARK: Check for collision with bug spray every single frame
+    for anchor in currentFrame.anchors {
+      guard let node = sceneView.node(for: anchor),
+        node.name == NodeType.bugspray.rawValue
+        else { continue }
+
+      let distance = simd_distance(anchor.transform.columns.3, currentFrame.camera.transform.columns.3)
+
+      if distance < 0.2 { remove(bugspray: anchor); break }
+    }
+
+    
   }
   
   private func setUpWorld() {  // load the alien once — only if isWorldSetUp is false
@@ -79,8 +96,13 @@ class GameScene: SKScene {
         let anchor = GameAnchor(transform: transform)
         if let name = node.name, //get the type of the bug from the SKSpriteNode name you specified in Level1.sks
           let type = NodeType(rawValue: name) {
+          
           anchor.type = type
           sceneView.session.add(anchor: anchor)
+          if anchor.type == .firebug {
+            addBugSpray(to: currentFrame)
+          }
+          
         }
       }
     }
@@ -117,11 +139,11 @@ class GameScene: SKScene {
     var hitBug: SKNode?
     
     // MARK: Find if bug is hit
-    let hitNodes = nodes(at: sight.position) // retrieve all nodes intersecting the sight's xy location
-    // ARKit calculates a 2D posn and scale for the SKNode from the 3D information
+    let hitNodes = nodes(at: sight.position) // retrieve all nodes intersecting the sight's xy location. ARKit calculates a 2D posn and scale for the SKNode from the 3D information
     
     for node in hitNodes {
-      if node.name == "bug" {
+      if node.name == NodeType.bug.rawValue ||
+        (node.name == NodeType.firebug.rawValue && hasBugspray)  {
         hitBug = node
         break
       }
@@ -139,5 +161,36 @@ class GameScene: SKScene {
       hitBug.run(SKAction.sequence(sequence))
     }
     
+    hasBugspray = false
+  }
+  
+  
+  //MARK: - BUG SPRAY
+  
+  
+  // Add a new anchor of type bugspray with a random position. You randomize the x (side) and z (forward/back) values between -1 and 1 and the y (up/down) value between -0.5 and 0.5
+  private func addBugSpray(to currentFrame: ARFrame) { //MARK: Q - why need currentFrame parameter
+    var translation = matrix_identity_float4x4
+    translation.columns.3.x = Float(drand48()*2 - 1)
+    translation.columns.3.z = -Float(drand48()*2 - 1)
+    translation.columns.3.y = Float(drand48() - 0.5)
+    let transform = currentFrame.camera.transform * translation
+    
+    let anchor = GameAnchor(transform: transform)
+    anchor.type = .bugspray
+    sceneView.session.add(anchor: anchor)
+  }
+  
+  private func remove(bugspray anchor: ARAnchor) {
+    run(Sounds.bugspray)
+    sceneView.session.remove(anchor: anchor)
+    hasBugspray = true
+  }
+  
+  var hasBugspray = false {
+    didSet {
+      let sightImageName = hasBugspray ? "bugspraySight" : "sight"
+      sight.texture = SKTexture(imageNamed: sightImageName)
+    }
   }
 }

@@ -9,9 +9,5 @@
 import ARKit
 
 class GameAnchor: ARAnchor {
-
   var type: NodeType? // hold the type of node associated with the anchor
-  
-  
-  
 }
